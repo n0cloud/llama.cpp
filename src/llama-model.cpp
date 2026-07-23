@@ -631,14 +631,6 @@ struct ggml_backend_meta_split_state llama_meta_device_get_split_state(const str
                 GGML_ASSERT(segments.size() == 2);
                 return {granularity_q, granularity_kv};
             }
-            if (ud->model->arch == LLM_ARCH_STEP35 || ud->model->arch == LLM_ARCH_LAGUNA) {
-                if (std::regex_match(tensor_name, pattern_attn_gate_weight)) {
-                    GGML_ASSERT(segments.size() == 1);
-                    // attention gate must shard in lock-step with the Q-weight head split
-                    const int64_t head_dim = hparams.n_embd_head_k(il);
-                    return {granularity_q * segments[0].first / (hparams.n_head(il) * head_dim)};
-                }
-            }
         }
 
         // FFN
@@ -647,6 +639,14 @@ struct ggml_backend_meta_split_state llama_meta_device_get_split_state(const str
             const int64_t blck_size_perf = std::lcm(blck_size, 128);
             GGML_ASSERT(segments.size() == 1);
             return {blck_size_perf};
+        }
+
+        if (ud->model->arch == LLM_ARCH_STEP35 || ud->model->arch == LLM_ARCH_LAGUNA) {
+            GGML_ASSERT(segments.size() == 1);
+            const int64_t max_el      = segments[0].first;
+            if (std::regex_match(tensor_name, pattern_attn_gate_weight)) {
+                return {hparams.n_head(il) / hparams.n_head_kv(il)};
+            }
         }
 
         // everything else
